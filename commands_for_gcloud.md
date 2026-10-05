@@ -211,7 +211,7 @@ gcloud artifacts repositories create rag-repo \\
 
 ```powershell
 # Submit a build to Google Cloud Build (this builds the image in the cloud and pushes it)
-gcloud builds submit --tag us-central1-docker.pkg.dev/dmtxpress/rag-repo/rag-api:v1 .
+gcloud builds submit --tag us-central1-docker.pkg.dev/enterprise-rag-510104/rag-repo/rag-api:v1 .
 ```
 
 ### 6\. Create a vpc connector:
@@ -235,18 +235,18 @@ Deploy the containerized app to Google Cloud Run.
 ```powershell
 
 gcloud run deploy rag-api \\
-  --image us-central1-docker.pkg.dev/dmtxpress/rag-repo/rag-api:v1 \\
+  --image us-central1-docker.pkg.dev/enterprise-rag-510104/rag-repo/rag-api:v1 \\
   --region us-central1 \\
   --platform managed \\
   --allow-unauthenticated \\
-  --memory 2Gi \\
+  --memory 2Gi \\   
   --timeout=300 \\
   --vpc-connector rag-vps \\
-  --set-env-vars "PROJECT\_ID=dmtxpress" \\
+  --set-env-vars "PROJECT\_ID=enterprise-rag-510104" \\
   --set-env-vars "LOCATION=us-central1" \\
   --set-env-vars "GCP\_DOC\_AI\_PROCESSOR\_ID=" \\
-  --set-env-vars "GCP\_RAW\_BUCKET=dmtxpress-rag-raw" \\
-  --set-env-vars "GCP\_PROCESSED\_BUCKET=dmtxpress-rag-processed" \\
+  --set-env-vars "GCP\_RAW\_BUCKET=enterprise-rag-510104-rag-raw" \\
+  --set-env-vars "GCP\_PROCESSED\_BUCKET=enterprise-rag-510104-rag-processed" \\
   --set-env-vars "QDRANT\_API\_KEY=
 
 &#x20; --set-env-vars "QDRANT\_CLUSTER\_ENDPOINT=

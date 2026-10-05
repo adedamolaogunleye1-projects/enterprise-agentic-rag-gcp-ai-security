@@ -13,6 +13,7 @@ class Settings:
     RAW_BUCKET = os.getenv("GCP_RAW_BUCKET", "rag-data-raw")
     PROCESSED_BUCKET = os.getenv("GCP_PROCESSED_BUCKET", "rag-data-processed")
     LOCAL_MODE: bool = True
+    PORTKEY_API_KEY = os.getenv("PORTKEY_API_KEY")
 
     # --- VECTOR DB (QDRANT) ---
     QDRANT_URL = os.getenv("QDRANT_CLUSTER_ENDPOINT")
