@@ -230,7 +230,7 @@ source tenvv/Scripts/activate   # Windows Git Bash
 pip install -r requirements.txt
 ```
 
-Create `.env` — see [DOCS/07_ENVIRONMENT_VARIABLES.md](DOCS/07_ENVIRONMENT_VARIABLES.md) for all required keys.
+Create `.env` 
 
 ```bash
 # Ingest documents locally
@@ -248,7 +248,7 @@ streamlit run evals/app.py
 
 ### Cloud deployment (scalable)
 
-See [commands_scalable.md](commands_scalable.md) for the full step-by-step. High level:
+
 
 ```bash
 # 1. Create AR repo first
