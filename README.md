@@ -4,14 +4,14 @@ A production-grade, enterprise-level scalable RAG system built with **LangGraph*
 
 ## Key Features
 
-- **Agentic Intelligence**: LangGraph for cyclic reasoning, multi-step planning, and conversation memory.
-- **Guardrails**: NeMo Guardrails gate blocks off-topic, jailbreak, and injection inputs before any retrieval.
-- **LLM Gateway**: Portkey routes all LLM calls with automatic fallback between primary and backup Groq keys.
-- **Enterprise Search**: Qdrant Cloud for high-performance vector search + FlashRank for local semantic reranking.
-- **Observability**: Full trace nesting with **Pydantic Logfire** and **LangSmith** across every agent node.
-- **Evaluation Suite**: RAGAS-powered eval pipeline (6 metrics) with a dedicated Streamlit demo app.
-- **Scalable Infrastructure**: Deployed on **Google Cloud Run** with Cloud Build CI/CD and VPC Connectors.
-
+Agentic Intelligence — LangGraph cyclic graph: Planner → Retriever → Responder with persistent memory across sessions
+Two-Gate Safety — Gate 1: NeMo Guardrails (blocks jailbreak/off-topic); Gate 2: Redis Semantic Cache (serves cached answers in ~50ms)
+Persistent Memory — LangGraph PostgresSaver on Cloud SQL — conversation history survives container restarts and scale-to-zero
+LLM Gateway — Portkey routes all LLM calls with automatic fallback (Llama 3.3 70B → Llama 3.1 8B), full dashboard visibility
+Enterprise Search — Qdrant Cloud vector search + FlashRank local reranker
+Event-Driven Ingestion — Upload a file to GCS → Eventarc fires → Ingestion service auto-parses, embeds, and indexes. No manual steps.
+Evaluation Suite — RAGAS (5 metrics) + Jaccard Tool Correctness. GCS-persisted history. Deployed as its own Cloud Run service.
+Full Observability — Pydantic Logfire + LangSmith traces across every agent node and eval run
 ---
 
 ## Agent Intelligence Flow
