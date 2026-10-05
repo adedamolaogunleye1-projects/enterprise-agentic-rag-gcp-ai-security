@@ -1,20 +1,27 @@
-# Enterprise Agentic RAG (Scalable Pipeline)
+# Enterprise Agentic RAG
 
-A production-grade, enterprise-level scalable RAG system built with **LangGraph**, **Google Cloud Platform (GCP)**, and a **Portkey LLM Gateway**. The system distinguishes between technical "True Data" and random "Noisy Data" using semantic re-ranking, history-aware planning, and NeMo Guardrails for input/output safety.
+A production-grade RAG system built with **LangGraph**, **NeMo Guardrails**, **Portkey LLM Gateway**, **RAGAS Evals**, and **Google Cloud Platform**. Deployed as four independent microservices on Cloud Run, managed entirely with Terraform.
+
+---
 
 ## Key Features
 
-Agentic Intelligence — LangGraph cyclic graph: Planner → Retriever → Responder with persistent memory across sessions
-Two-Gate Safety — Gate 1: NeMo Guardrails (blocks jailbreak/off-topic); Gate 2: Redis Semantic Cache (serves cached answers in ~50ms)
-Persistent Memory — LangGraph PostgresSaver on Cloud SQL — conversation history survives container restarts and scale-to-zero
-LLM Gateway — Portkey routes all LLM calls with automatic fallback (Llama 3.3 70B → Llama 3.1 8B), full dashboard visibility
-Enterprise Search — Qdrant Cloud vector search + FlashRank local reranker
-Event-Driven Ingestion — Upload a file to GCS → Eventarc fires → Ingestion service auto-parses, embeds, and indexes. No manual steps.
-Evaluation Suite — RAGAS (5 metrics) + Jaccard Tool Correctness. GCS-persisted history. Deployed as its own Cloud Run service.
-Full Observability — Pydantic Logfire + LangSmith traces across every agent node and eval run
+- **Agentic Intelligence** — LangGraph cyclic graph: Planner → Retriever → Responder with persistent memory across sessions
+- **Two-Gate Safety** — Gate 1: NeMo Guardrails (blocks jailbreak/off-topic); Gate 2: Redis Semantic Cache (serves cached answers in ~50ms)
+- **Persistent Memory** — LangGraph `PostgresSaver` on Cloud SQL — conversation history survives container restarts and scale-to-zero
+- **LLM Gateway** — Portkey routes all LLM calls with automatic fallback (Llama 3.3 70B → Llama 3.1 8B), full dashboard visibility
+- **Enterprise Search** — Qdrant Cloud vector search + FlashRank local reranker
+- **Event-Driven Ingestion** — Upload a file to GCS → Eventarc fires → Ingestion service auto-parses, embeds, and indexes. No manual steps.
+- **Evaluation Suite** — RAGAS (5 metrics) + Jaccard Tool Correctness. GCS-persisted history. Deployed as its own Cloud Run service.
+- **Full Observability** — Pydantic Logfire + LangSmith traces across every agent node and eval run
+
 ---
 
-## Agent Intelligence Flow
+## Architecture
+
+### Monolithic (v1)
+
+The original single-process application — all components in one container, in-memory state, manual ingestion.
 
 ```mermaid
 graph TD
@@ -25,10 +32,83 @@ graph TD
     Guard -->|Pass| Planner{Planner Node}
     Planner -->|Conversational| Responder[Responder Node]
     Planner -->|Technical| Retriever[Retriever Node]
-    Retriever --> Reranker[FlashRank Local Reranker]
+    Retriever --> Reranker[FlashRank Reranker]
     Reranker --> Responder
     Responder --> UI
-    Responder -.-> Memory[(LangGraph MemorySaver)]
+    Responder -.-> Memory[(LangGraph MemorySaver\nin-process RAM)]
+```
+
+### Scalable Enterprise (v2 — current)
+
+Four independent microservices, event-driven ingestion, persistent memory, semantic caching, and full IaC via Terraform.
+
+```mermaid
+graph TB
+    subgraph UI ["Interface Layer"]
+        CHAT["Streamlit Chat UI\n(Cloud Run — Public)"]
+        EAPP["Streamlit Eval App\n(Cloud Run — Public)"]
+    end
+
+    subgraph BACKEND ["Backend API — Cloud Run (Public)"]
+        API["⚡ FastAPI /query"]
+        G1{"🛡️ Gate 1\nNeMo Guardrails"}
+        G2{"⚡ Gate 2\nRedis Semantic Cache\n~50ms HIT"}
+        subgraph AGENT ["LangGraph Agent"]
+            PL["🗺️ Planner"]
+            RT["🔍 Retriever"]
+            RS["💬 Responder"]
+        end
+        MEM[("💾 PostgresSaver\nCloud SQL Postgres 15\npersists across restarts")]
+    end
+
+    subgraph INGEST ["Ingestion — Cloud Run (Internal)"]
+        EA["📡 Eventarc\nobject.finalized"]
+        SVC["Ingestion Service\nPOST /ingest"]
+        DOCAI["Google Document AI"]
+        VEMB["Vertex AI\ntext-embedding-004"]
+    end
+
+    subgraph EVALS ["Evals — Cloud Run (Public)"]
+        RAGAS["RAGAS Metrics\n5 experiments"]
+        TC["Tool Correctness\nJaccard"]
+        HIST[("💾 GCS\nEval History")]
+    end
+
+    subgraph GCP ["GCP Private Network"]
+        REDIS[("🔴 Redis Memorystore\nprivate IP — semantic cache")]
+        SQL[("🐘 Cloud SQL\nunix socket")]
+        QD[("🗄️ Qdrant Cloud\nVector DB")]
+        GCS1[("☁️ GCS Raw Bucket")]
+        GCS2[("☁️ GCS Processed Bucket")]
+    end
+
+    subgraph GATEWAY ["LLM Gateway"]
+        PK["🔀 Portkey"]
+        LLM1["Groq Llama 3.3 70B"]
+        LLM2["Groq Fallback 8B"]
+    end
+
+    CHAT -->|query| API
+    EAPP -->|BACKEND_URL| API
+    API --> G1 --> G2
+    G2 -->|HIT| CHAT
+    G2 -->|MISS| PL
+    PL --> RT --> QD --> RT
+    RT --> RS --> PK --> LLM1
+    PK -.->|fallback| LLM2
+    RS --> MEM --> PL
+    RS -->|cache| G2
+    G2 --- REDIS
+
+    GCS1 -->|event| EA --> SVC
+    SVC --> DOCAI --> SVC
+    SVC --> VEMB --> QD
+    SVC --> GCS2
+
+    EAPP --> RAGAS --> HIST
+    EAPP --> TC --> HIST
+
+    MEM --- SQL
 ```
 
 ---
@@ -120,59 +200,70 @@ graph TD
 
 | Layer | Technology |
 |-------|-----------|
-| Orchestration | LangChain + LangGraph |
-| LLMs | Groq (Llama 3.3 70B) via **Portkey** gateway |
-| Guardrails | NeMo Guardrails |
+| Agent Orchestration | LangGraph (cyclic graph) |
+| LLMs | Groq Llama 3.3 70B + 3.1 8B via **Portkey** gateway |
+| Guardrails | NeMo Guardrails (Gate 1) |
+| Semantic Cache | Redis Memorystore + Vertex AI embeddings (Gate 2) |
+| Persistent Memory | LangGraph `PostgresSaver` on Cloud SQL Postgres 15 |
 | Vector DB | Qdrant Cloud |
 | Reranking | FlashRank (local, zero-latency) |
-| Embeddings | HuggingFace sentence-transformers |
-| Cloud Compute | Google Cloud Run (Serverless) |
-| Cloud Storage | Google Cloud Storage (GCS) |
-| Document Parsing | Google Document AI (PDF) |
-| Observability | Pydantic Logfire + LangSmith |
-| Evaluation | RAGAS + custom Tool Correctness (Jaccard) |
+| Embeddings | **Vertex AI text-embedding-004** |
+| Document Parsing | Google Document AI (PDF OCR) |
+| Auto-Ingestion | GCS → Eventarc → Cloud Run (internal) |
+| Evaluation | RAGAS (5 metrics) + Jaccard Tool Correctness |
+| Eval Storage | GCS (`eval-results/` prefix, persists across restarts) |
+| Observability | Pydantic Logfire + LangSmith + Portkey Dashboard |
+| Compute | Google Cloud Run (4 independent microservices) |
+| IaC | Terraform (VPC, Cloud SQL, Redis, Eventarc, Cloud Run) |
+| CI/CD | Google Cloud Build (parallel 4-image build) |
+| Networking | Direct VPC Egress (no connector) |
 
 ---
 
 ## Getting Started
 
-### 1. Install dependencies
+### Local development
 
-```powershell
+```bash
 python -m venv tenvv
-.\tenvv\Scripts\activate
+source tenvv/Scripts/activate   # Windows Git Bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure environment
+Create `.env` — see [DOCS/07_ENVIRONMENT_VARIABLES.md](DOCS/07_ENVIRONMENT_VARIABLES.md) for all required keys.
 
-Create a `.env` file — see `commands.md` Section 2 for all required keys (Groq, Qdrant, GCP, Portkey, Logfire, LangSmith, JUDGE_GROQ for evals).
+```bash
+# Ingest documents locally
+python -m app.ingestion.processor DATA/true_data
 
-### 3. Run data ingestion
-
-```powershell
-python -m app.ingestion.processor DATA --wipe
-```
-
-### 4. Launch the app
-
-```powershell
-# Terminal 1 — FastAPI backend
+# Terminal 1 — backend
 uvicorn app.main:app --reload --port 8000
 
-# Terminal 2 — Streamlit UI
+# Terminal 2 — UI
 streamlit run ui/app.py
-```
 
-### 5. Run the eval suite (optional)
-
-```powershell
-# Requires the FastAPI backend running on :8000
+# Terminal 3 — evals (optional)
 streamlit run evals/app.py
 ```
 
----
+### Cloud deployment (scalable)
 
+See [commands_scalable.md](commands_scalable.md) for the full step-by-step. High level:
+
+```bash
+# 1. Create AR repo first
+cd terraform && terraform apply -target=google_artifact_registry_repository.repo
+
+# 2. Build all 4 Docker images in parallel
+cd .. && gcloud builds submit --config cloudbuild.yaml --project=YOUR_PROJECT .
+
+# 3. Deploy everything
+cd terraform && terraform apply
+```
+
+Outputs: `backend_url`, `ui_url`, `evals_url`, `ingestion_url`
+
+---
 
 
 
