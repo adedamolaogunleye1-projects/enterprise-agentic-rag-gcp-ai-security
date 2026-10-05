@@ -9,7 +9,7 @@ A production-grade RAG system built with **LangGraph**, **NeMo Guardrails**, **P
 - **Agentic Intelligence** — LangGraph cyclic graph: Planner → Retriever → Responder with persistent memory across sessions
 - **Two-Gate Safety** — Gate 1: NeMo Guardrails (blocks jailbreak/off-topic); Gate 2: Redis Semantic Cache (serves cached answers in ~50ms)
 - **Persistent Memory** — LangGraph `PostgresSaver` on Cloud SQL — conversation history survives container restarts and scale-to-zero
-- **LLM Gateway** — Portkey routes all LLM calls with automatic fallback (Llama 3.3 70B → Llama 3.1 8B), full dashboard visibility
+- **LLM Gateway** — Portkey routes all LLM calls with automatic fallback GPT-OSS 20B → GPT-OSS 120B), full dashboard visibility
 - **Enterprise Search** — Qdrant Cloud vector search + FlashRank local reranker
 - **Event-Driven Ingestion** — Upload a file to GCS → Eventarc fires → Ingestion service auto-parses, embeds, and indexes. No manual steps.
 - **Evaluation Suite** — RAGAS (5 metrics) + Jaccard Tool Correctness. GCS-persisted history. Deployed as its own Cloud Run service.
@@ -84,8 +84,8 @@ graph TB
 
     subgraph GATEWAY ["LLM Gateway"]
         PK["🔀 Portkey"]
-        LLM1["Groq Llama 3.3 70B"]
-        LLM2["Groq Fallback 8B"]
+        LLM1["GPT-OSS 20B"]
+        LLM2["GPT-OSS 120B"]
     end
 
     CHAT -->|query| API
@@ -201,7 +201,7 @@ graph TB
 | Layer | Technology |
 |-------|-----------|
 | Agent Orchestration | LangGraph (cyclic graph) |
-| LLMs | Groq Llama 3.3 70B + 3.1 8B via **Portkey** gateway |
+| LLMs |GPT-OSS 120B via **Portkey** gateway |
 | Guardrails | NeMo Guardrails (Gate 1) |
 | Semantic Cache | Redis Memorystore + Vertex AI embeddings (Gate 2) |
 | Persistent Memory | LangGraph `PostgresSaver` on Cloud SQL Postgres 15 |
